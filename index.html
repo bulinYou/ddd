@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <!-- 核心修改 1: 添加 Viewport 标签，禁止缩放，适配移动端宽度 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>魔法少女的圣诞树 - 软萌雪花版</title>
+    
+    <!-- 引入可爱的圆体字 -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Noto+Sans+JP:wght@500&display=swap" rel="stylesheet">
+    
+    <style>
+        /* 背景：保持新海诚式梦幻渐变，稍微提亮一点 */
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: linear-gradient(135deg, #2e1a47 0%, #7b5bb5 40%, #ffc3bd 100%);
+            font-family: 'Fredoka One', cursive;
+            /* 防止移动端长按选中文本 */
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none; /* 核心修改 2: 禁止浏览器默认触摸行为 */
+        }
+        canvas { display: block; }
+        
+        /* UI 层 */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 80px rgba(123, 91, 181, 0.4); /* 紫色柔光晕影 */
+        }
+        
+        #title-box {
+            position: absolute; top: 8%; width: 100%; text-align: center;
+            animation: float 3s ease-in-out infinite;
+            z-index: 10;
+        }
+        
+        h1 {
+            color: #fff; font-size: 3.5rem; margin: 0;
+            text-shadow: 3px 3px 0px #ff9ecd, 5px 5px 0px #9d7ad2; /* 粉紫双色描边 */
+            letter-spacing: 2px;
+            transform: rotate(-2deg);
+        }
+        
+        .subtitle {
+            font-family: 'Noto Sans JP', sans-serif;
+            color: #fff; font-size: 1.1rem;
+            background: rgba(255, 255, 255, 0.25);
+            padding: 6px 18px; border-radius: 25px;
+            display: inline-block; margin-top: 10px;
+            backdrop-filter: blur(4px);
+            border: 2px solid rgba(255,255,255,0.6);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* 核心修改 3: 移动端 CSS 适配 */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.2rem; /* 缩小标题 */
+                text-shadow: 2px 2px 0px #ff9ecd, 3px 3px 0px #9d7ad2;
+            }
+            #title-box {
+                top: 10%; /* 稍微下移 */
+            }
+            .subtitle {
+                font-size: 0.9rem;
+                padding: 4px 14px;
+            }
+        }
+
+        /* 加载器 */
+        #loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #2e1a47; z-index: 999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: white;
+        }
+        .snow-loader {
+            font-size: 50px; 
+            animation: spin-slow 3s linear infinite;
+        }
+        @keyframes spin-slow { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        
+        #fix-btn {
+            margin-top: 20px; padding: 10px 25px;
+            background: #ff9ecd; color: white; border: none;
+            border-radius: 25px; font-family: inherit; cursor: pointer;
+            box-shadow: 0 4px 0 #d47cb3;
+        }
+        #fix-btn:active { box-shadow: 0 0 0 #d47cb3; transform: translateY(4px); }
+    </style>
+</head>
+<body>
+    <div id="loader">
+        <div class="snow-loader">❄️</div>
+        <div style="margin-top:15px; letter-spacing:1px;">Collecting Snowflakes...</div>
+        <button id="fix-btn" onclick="loadScript(1)" style="display:none">Switch Line</button>
+    </div>
+
+    <div id="ui-layer">
+        <div id="title-box">
+            <h1>圣诞快乐 小莹同学</h1>
+            <!-- <div class="subtitle">❄️ 小莹同学 ❄️</div> -->
+        </div>
+    </div>
+
+    <script>
+        const sources = [
+            "./three.min.js",
+            "./three.min.js",
+            "./three.min.js"
+        ];
+
+        let loadTimer = null;
+        function loadScript(index) {
+            if (index >= sources.length) index = 0;
+            const script = document.createElement('script');
+            script.src = sources[index];
+            script.onload = () => setTimeout(initGame, 500);
+            script.onerror = () => loadScript(index + 1);
+            document.body.appendChild(script);
+            setTimeout(() => {
+                if(typeof THREE === 'undefined') document.getElementById('fix-btn').style.display = 'block';
+            }, 3000);
+        }
+        loadScript(0);
+
+        function initGame() {
+            document.getElementById('loader').style.display = 'none';
+            const scene = new THREE.Scene();
+            // 浅紫色空气感
+            scene.fog = new THREE.FogExp2(0x7b5bb5, 0.0012); 
+
+            const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            // 核心修改 4: 动态设置相机位置，手机竖屏时拉远距离
+            function updateCameraPosition() {
+                const isMobile = window.innerWidth < 768;
+                // 手机版 Z 轴设为 100，电脑版设为 75，让树在手机屏幕里完全展示出来
+                camera.position.set(0, 5, isMobile ? 100 : 75);
+            }
+            updateCameraPosition();
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.physicallyCorrectLights = true;
+            document.body.appendChild(renderer.domElement);
+
+            // === 柔和光照 ===
+            const ambientLight = new THREE.AmbientLight(0xffe6f2, 0.9); // 玫瑰粉白环境光
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+
+            // === 纹理生成 ===
+            const softSnowTexture = createSoftSnowflakeTexture();
+            const heartTexture = createHeartTexture();
+            const glowTexture = createGlowTexture();
+            const sparkleTexture = createSparkleTexture();
+
+            // === 交互 ===
+            let rotationY = 0;
+            let isDragging = false, prevX = 0;
+
+            const onDown = (x) => { isDragging=true; prevX=x; };
+            const onUp = () => isDragging=false;
+            const onMove = (x, y) => {
+                if(isDragging) rotationY -= (x - prevX) * 0.008;
+                prevX = x;
+                createMagicTrail(x, y);
+            };
+
+            // 鼠标事件
+            document.addEventListener('mousedown', e => onDown(e.clientX));
+            document.addEventListener('mouseup', onUp);
+            document.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+
+            // 触摸事件 (优化: 添加 preventDefault 避免页面抖动，但要注意 passive: false)
+            document.addEventListener('touchstart', e => {
+                onDown(e.touches[0].clientX);
+                // e.preventDefault(); // 大部分全屏 Canvas 需要这个，但在某些浏览器可能报 passive warning，视情况开启
+            }, {passive: false});
+            
+            document.addEventListener('touchend', onUp);
+            
+            document.addEventListener('touchmove', e => {
+                onMove(e.touches[0].clientX, e.touches[0].clientY);
+                // 核心修改 5: 阻止移动端滑动屏幕时的默认滚动/刷新行为
+                e.preventDefault(); 
+            }, {passive: false});
+
+            // === 1. 圣诞树主体 ===
+            const treeGroup = new THREE.Group();
+            scene.add(treeGroup);
+
+            // 树干 (Toon材质，棕色)
+            const trunkMat = new THREE.MeshToonMaterial({ color: 0x6d4c41 }); 
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.5, 12, 12), trunkMat);
+            trunk.position.y = -20;
+            treeGroup.add(trunk);
+
+            // 树叶粒子
+            const leafGeo = new THREE.BufferGeometry();
+            const leafPos = [], leafColors = [], leafSizes = [];
+            
+            const palette = [
+                new THREE.Color("#ffcce0"), // 浅粉
+                new THREE.Color("#e0ccff"), // 浅紫
+                new THREE.Color("#ffffff"), // 纯白
+                new THREE.Color("#ccffff")  // 冰蓝
+            ];
+
+            for(let i=0; i<3200; i++) {
+                const y = (Math.random() * 45) - 22;
+                const normH = (y + 22) / 45;
+                const r = (1 - normH) * 18 * (1 + Math.random()*0.4);
+                const spiral = normH * Math.PI * 4 + (i%3/3)*Math.PI*2;
+                
+                leafPos.push(r * Math.cos(spiral), y, r * Math.sin(spiral));
+                
+                const color = palette[Math.floor(Math.random() * palette.length)];
+                leafColors.push(color.r, color.g, color.b);
+                leafSizes.push(Math.random() * 2.5 + 2.5); 
+            }
+            leafGeo.setAttribute('position', new THREE.Float32BufferAttribute(leafPos, 3));
+            leafGeo.setAttribute('color', new THREE.Float32BufferAttribute(leafColors, 3));
+            leafGeo.setAttribute('size', new THREE.Float32BufferAttribute(leafSizes, 1));
+
+            const treeMat = new THREE.PointsMaterial({
+                vertexColors: true,
+                map: softSnowTexture,
+                transparent: true,
+                alphaTest: 0.05,
+                blending: THREE.NormalBlending,
+                depthWrite: false
+            });
+            const tree = new THREE.Points(leafGeo, treeMat);
+            treeGroup.add(tree);
+
+            // === 2. 装饰物：软萌爱心 ===
+            const decoGeo = new THREE.BufferGeometry();
+            const decoPos = [], decoColors = [];
+            for(let i=0; i<300; i++) {
+                const y = (Math.random() * 45) - 22;
+                const normH = (y + 22) / 45;
+                const r = (1 - normH) * 18 + 1.8;
+                const spiral = normH * Math.PI * 4 + (i%3/3)*Math.PI*2 + Math.random();
+                decoPos.push(r * Math.cos(spiral), y, r * Math.sin(spiral));
+                const c = Math.random()>0.6 ? new THREE.Color("#fffbe0") : new THREE.Color("#ff9ecd"); 
+                decoColors.push(c.r, c.g, c.b);
+            }
+            decoGeo.setAttribute('position', new THREE.Float32BufferAttribute(decoPos, 3));
+            decoGeo.setAttribute('color', new THREE.Float32BufferAttribute(decoColors, 3));
+            const decos = new THREE.Points(decoGeo, new THREE.PointsMaterial({
+                size: 2.8, vertexColors: true, map: heartTexture,
+                transparent: true, opacity: 0.95, depthWrite: false
+            }));
+            treeGroup.add(decos);
+
+            // === 3. 礼物盒 (马卡龙色) ===
+            const giftGroup = new THREE.Group();
+            treeGroup.add(giftGroup);
+            const giftColors = [0xffb7b2, 0xaec6cf, 0xfdfd96]; 
+
+            function createMacaronGift(x, z) {
+                const s = 2 + Math.random();
+                const mat = new THREE.MeshToonMaterial({ color: giftColors[Math.floor(Math.random()*giftColors.length)] });
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), mat);
+                mesh.position.set(x, -22, z);
+                mesh.rotation.y = Math.random();
+                const ribMat = new THREE.MeshToonMaterial({ color: 0xffffff });
+                mesh.add(new THREE.Mesh(new THREE.BoxGeometry(s*1.05, s, s*0.2), ribMat));
+                return mesh;
+            }
+            for(let i=0; i<10; i++) {
+                const ang = Math.random() * Math.PI * 2;
+                const dist = 6 + Math.random() * 9;
+                giftGroup.add(createMacaronGift(Math.cos(ang)*dist, Math.sin(ang)*dist));
+            }
+
+            // === 4. 树顶大雪花 ===
+            const topSnow = new THREE.Sprite(new THREE.SpriteMaterial({ 
+                map: softSnowTexture, color: 0xffffff 
+            }));
+            topSnow.position.y = 25;
+            topSnow.scale.set(12, 12, 1);
+            scene.add(topSnow);
+            
+            const halo = new THREE.Sprite(new THREE.SpriteMaterial({ 
+                map: glowTexture, color: 0xffcce0, opacity: 0.6, blending: THREE.AdditiveBlending 
+            }));
+            halo.position.y = 25;
+            halo.scale.set(35, 35, 1);
+            scene.add(halo);
+
+            // === 5. 飘落的雪花与花瓣 ===
+            const snowGroup = new THREE.Group();
+            scene.add(snowGroup);
+            
+            function createParticleLayer(texture, count, size, speed, color, opacity) {
+                const geo = new THREE.BufferGeometry();
+                const pos = [];
+                for(let i=0; i<count; i++) pos.push((Math.random()-0.5)*150, (Math.random()-0.5)*100, (Math.random()-0.5)*150);
+                geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+                const mat = new THREE.PointsMaterial({
+                    map: texture, color: color, size: size,
+                    transparent: true, opacity: opacity, depthWrite: false, blending: THREE.AdditiveBlending
+                });
+                const points = new THREE.Points(geo, mat);
+                points.userData = { speed: speed };
+                snowGroup.add(points);
+                return points;
+            }
+
+            const snows1 = createParticleLayer(softSnowTexture, 600, 2.0, 0.05, 0xffffff, 0.9);
+            const snows2 = createParticleLayer(softSnowTexture, 400, 3.5, 0.08, 0xffffff, 0.7); 
+            const petals = createParticleLayer(heartTexture, 300, 2.0, 0.04, 0xffb7b2, 0.8); 
+
+            // === 6. 魔法拖尾 ===
+            const trailGeo = new THREE.BufferGeometry();
+            const trailPos = new Float32Array(300);
+            const trailMat = new THREE.PointsMaterial({
+                color: 0xfff68f, size: 2.5, map: sparkleTexture, transparent: true, blending: THREE.AdditiveBlending
+            });
+            const trailPoints = new THREE.Points(trailGeo, trailMat);
+            scene.add(trailPoints);
+            let trailIdx = 0;
+
+            function createMagicTrail(cx, cy) {
+                const vec = new THREE.Vector3((cx/window.innerWidth)*2-1, -(cy/window.innerHeight)*2+1, 0.5);
+                vec.unproject(camera);
+                vec.sub(camera.position).normalize();
+                const pos = camera.position.clone().add(vec.multiplyScalar(40));
+                trailPos[trailIdx*3] = pos.x; trailPos[trailIdx*3+1] = pos.y; trailPos[trailIdx*3+2] = pos.z;
+                trailIdx = (trailIdx + 1) % 100;
+                trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+                trailGeo.attributes.position.needsUpdate = true;
+            }
+
+            // === 动画 ===
+            const clock = new THREE.Clock();
+            function animate() {
+                requestAnimationFrame(animate);
+                const time = clock.getElapsedTime();
+
+                treeGroup.position.y = Math.sin(time * 0.8) * 0.8; 
+                treeGroup.rotation.y = time * 0.12 + rotationY;
+
+                topSnow.rotation.z = time * 0.2;
+                halo.scale.setScalar(35 + Math.sin(time*1.5)*3);
+
+                [snows1, snows2, petals].forEach(p => {
+                    const pos = p.geometry.attributes.position.array;
+                    for(let i=1; i<pos.length; i+=3) {
+                        pos[i] -= p.userData.speed;
+                        pos[i-1] += Math.sin(time*0.5 + pos[i])*0.03; 
+                        if(pos[i] < -50) pos[i] = 50;
+                    }
+                    p.geometry.attributes.position.needsUpdate = true;
+                });
+                
+                trailMat.opacity = 0.6 + Math.sin(time*8)*0.3;
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            // 窗口调整适配
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                updateCameraPosition(); // 核心修改: 旋转屏幕时也重新判断相机位置
+            });
+        }
+
+        // === 纹理绘制区 (不变) ===
+        function createSoftSnowflakeTexture() {
+            const c = document.createElement('canvas'); c.width=64; c.height=64;
+            const ctx = c.getContext('2d'); ctx.translate(32,32);
+            ctx.fillStyle = '#fff';
+            for(let i=0; i<6; i++) {
+                ctx.rotate(Math.PI/3);
+                ctx.beginPath();
+                ctx.roundRect(-4, 0, 8, 24, 4); 
+                ctx.fill();
+                ctx.beginPath(); ctx.arc(0, 18, 3, 0, Math.PI*2); ctx.fill();
+            }
+            ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
+            return new THREE.CanvasTexture(c);
+        }
+
+        function createHeartTexture() {
+            const c = document.createElement('canvas'); c.width=64; c.height=64;
+            const ctx = c.getContext('2d'); ctx.translate(32,32); ctx.fillStyle='#fff';
+            ctx.beginPath();
+            ctx.moveTo(0, 10);
+            ctx.bezierCurveTo(0, 7, -10, -10, -25, -10);
+            ctx.bezierCurveTo(-55, -10, -55, 22.5, -55, 22.5);
+            ctx.bezierCurveTo(-55, 40, -35, 62, 0, 80);
+            ctx.bezierCurveTo(35, 62, 55, 40, 55, 22.5);
+            ctx.bezierCurveTo(55, 22.5, 55, -10, 25, -10);
+            ctx.bezierCurveTo(10, -10, 0, 7, 0, 10);
+            ctx.fill();
+            return new THREE.CanvasTexture(c);
+        }
+
+        function createSparkleTexture() {
+            const c = document.createElement('canvas'); c.width=32; c.height=32;
+            const ctx = c.getContext('2d'); ctx.translate(16,16);
+            ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,0,10,0,Math.PI*2); ctx.fill();
+            return new THREE.CanvasTexture(c);
+        }
+
+        function createGlowTexture() {
+            const c = document.createElement('canvas'); c.width=64; c.height=64;
+            const ctx = c.getContext('2d');
+            const g = ctx.createRadialGradient(32,32,0,32,32,32);
+            g.addColorStop(0, 'rgba(255,255,255,0.8)');
+            g.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = g; ctx.fillRect(0,0,64,64);
+            return new THREE.CanvasTexture(c);
+        }
+    </script>
+</body>
+</html>
